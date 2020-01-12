@@ -10,7 +10,9 @@ import psycopg2.extras
 
 from relay.blockchain import (
     currency_network_events,
+    escrow_events,
     exchange_events,
+    gateway_events,
     token_events,
     unw_eth_events,
 )
@@ -93,7 +95,12 @@ class EthindexDB:
     """
 
     def __init__(
-        self, conn, standard_event_types, event_builders, from_to_types, address=None
+        self,
+        conn,
+        standard_event_types,
+        event_builders,
+        from_to_types=None,
+        address=None,
     ):
         self.conn = conn
         self.default_address = address
@@ -188,6 +195,26 @@ class EthindexDB:
         """Function for compatibility with relay.blockchain.ExchangeProxy. Will be removed after a refactoring"""
         return self.get_user_events(event_name, user_address, from_block, timeout)
 
+    def get_gateway_events(
+        self,
+        event_name: str,
+        user_address: str = None,
+        from_block: int = 0,
+        timeout: float = None,
+    ) -> List[BlockchainEvent]:
+        """Function for compatibility with relay.blockchain.GatewayProxy. Will be removed after a refactoring"""
+        return self.get_user_events(event_name, user_address, from_block, timeout)
+
+    def get_escrow_events(
+        self,
+        event_name: str,
+        user_address: str = None,
+        from_block: int = 0,
+        timeout: float = None,
+    ) -> List[BlockchainEvent]:
+        """Function for compatibility with relay.blockchain.EscrowProxy. Will be removed after a refactoring"""
+        return self.get_user_events(event_name, user_address, from_block, timeout)
+
     def get_user_events(
         self,
         event_name: str,
@@ -257,6 +284,20 @@ class EthindexDB:
             user_address,
             from_block,
             timeout,
+        )
+
+    def get_all_escrow_events(
+        self, user_address: str = None, from_block: int = 0, timeout: float = None
+    ) -> List[BlockchainEvent]:
+        return self.get_all_contract_events(
+            escrow_events.standard_event_types, user_address, from_block, timeout
+        )
+
+    def get_all_gateway_events(
+        self, user_address: str = None, from_block: int = 0, timeout: float = None
+    ) -> List[BlockchainEvent]:
+        return self.get_all_contract_events(
+            gateway_events.standard_event_types, user_address, from_block, timeout
         )
 
     def get_all_exchange_events(

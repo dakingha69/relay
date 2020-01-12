@@ -4,7 +4,9 @@ from marshmallow_oneofschema import OneOfSchema
 from tldeploy import identity
 
 from relay.blockchain.currency_network_events import CurrencyNetworkEvent
+from relay.blockchain.escrow_events import EscrowEvent
 from relay.blockchain.exchange_events import ExchangeEvent
+from relay.blockchain.gateway_events import GatewayEvent
 from relay.blockchain.unw_eth_events import UnwEthEvent
 from relay.network_graph.payment_path import PaymentPath
 
@@ -124,11 +126,26 @@ class UserExchangeEventSchema(ExchangeEventSchema):
     direction = fields.Str()
 
 
+class GatewayEventSchema(BlockchainEventSchema):
+    gatewayAddress = Address(attribute="gateway_address")
+    changedExchangeRate = BigInteger(attribute="changed_exchange_rate")
+
+
+class EscrowEventSchema(BlockchainEventSchema):
+    escrowAddress = Address(attribute="escrow_address")
+    weiAmount = BigInteger(attribute="wei_amount")
+    payee = Address(attribute="payee")
+    from_ = Address(data_key="from")
+    to = Address(attribute="to")
+
+
 class AnyEventSchema(OneOfSchema):
     type_schemas = {
         "CurrencyNetworkEvent": UserCurrencyNetworkEventSchema,
         "UnwEthEvent": UserTokenEventSchema,
         "ExchangeEvent": ExchangeEventSchema,
+        "GatewayEvent": GatewayEventSchema,
+        "EscrowEvent": EscrowEventSchema,
     }
 
     type_field = "__class__"
@@ -140,6 +157,10 @@ class AnyEventSchema(OneOfSchema):
             return "UnwEthEvent"
         elif isinstance(obj, ExchangeEvent):
             return "ExchangeEvent"
+        elif isinstance(obj, GatewayEvent):
+            return "GatewayEvent"
+        elif isinstance(obj, EscrowEvent):
+            return "EscrowEvent"
 
         raise RuntimeError(f"Unknown object type: {obj.__class__.__name__}")
 
@@ -206,6 +227,16 @@ class CurrencyNetworkSchema(Schema):
     customInterests = fields.Bool(attribute="custom_interests")
     preventMediatorInterests = fields.Bool(attribute="prevent_mediator_interests")
     isFrozen = fields.Bool(attribute="is_frozen")
+
+
+class GatewaySchema(Schema):
+    class Meta:
+        strict = True
+
+    exchangeRate = fields.Int(attribute="exchange_rate")
+    address = Address()
+    escrowAddress = fields.Str(attribute="escrow_address")
+    gatedNetworkAddress = fields.Str(attribute="gated_currency_network_address")
 
 
 class PaymentPathSchema(Schema):

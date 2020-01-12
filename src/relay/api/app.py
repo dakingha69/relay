@@ -26,8 +26,13 @@ from .resources import (
     CloseTrustline,
     ContactList,
     DeployIdentity,
+    EventsEscrow,
+    EventsGateway,
     EventsNetwork,
     Factories,
+    Gateway,
+    GatewayDeposit,
+    GatewayList,
     GraphDump,
     GraphImage,
     IdentityInfos,
@@ -163,6 +168,19 @@ def ApiApp(trustlines):
         DeleteClientToken,
         "/pushnotifications/<address:user_address>/token/<string:client_token>",
     )
+
+    add_resource(GatewayList, "/gateways")
+
+    add_resource(Gateway, "/gateways/<address:gateway_address>")
+
+    add_resource(
+        GatewayDeposit,
+        "/gateways/<address:gateway_address>/deposits/<address:user_address>",
+    )
+
+    add_resource(EventsGateway, "/gateways/<address:gateway_address>/events")
+
+    add_resource(EventsEscrow, "/escrows/<address:escrow_address>/events")
 
     api_bp.add_url_rule(
         "/networks/<address:network_address>/image",

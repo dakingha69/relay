@@ -30,14 +30,18 @@ from relay.pushservice.pushservice import (
 
 from .blockchain import (
     currency_network_events,
+    escrow_events,
     exchange_events,
+    gateway_events,
     token_events,
     unw_eth_events,
 )
 from .blockchain.currency_network_proxy import CurrencyNetworkProxy
 from .blockchain.delegate import Delegate, DelegationFees
+from .blockchain.escrow_proxy import EscrowProxy
 from .blockchain.events import BlockchainEvent
 from .blockchain.exchange_proxy import ExchangeProxy
+from .blockchain.gateway_proxy import GatewayProxy
 from .blockchain.node import Node
 from .blockchain.proxy import sorted_events
 from .blockchain.token_proxy import TokenProxy
@@ -70,6 +74,8 @@ class TrustlinesRelay:
         self.orderbook: OrderBookGreenlet = None
         self.unw_eth_proxies: Dict[str, UnwEthProxy] = {}
         self.token_proxies: Dict[str, TokenProxy] = {}
+        self.gateway_proxies: Dict[str, GatewayProxy] = {}
+        self.escrow_proxies: Dict[str, EscrowProxy] = {}
         self._firebase_raw_push_service: Optional[FirebaseRawPushService] = None
         self._client_token_db: Optional[ClientTokenDB] = None
         self.fixed_gas_price: Optional[int] = None
@@ -78,6 +84,14 @@ class TrustlinesRelay:
     @property
     def network_addresses(self) -> Iterable[str]:
         return self.currency_network_proxies.keys()
+
+    @property
+    def gateway_addresses(self) -> Iterable[str]:
+        return self.gateway_proxies.keys()
+
+    @property
+    def escrow_addresses(self) -> Iterable[str]:
+        return self.escrow_proxies.keys()
 
     @property
     def exchange_addresses(self) -> Iterable[str]:
@@ -125,6 +139,35 @@ class TrustlinesRelay:
             )
         else:
             return self.currency_network_proxies[network_address]
+
+    def get_event_selector_for_gateway(self, gateway_address):
+        """return either a GatewayProxy or a EthindexDB instance
+        This is being used from relay.api to query for events.
+        """
+        if self.use_eth_index:
+            return ethindex_db.EthindexDB(
+                ethindex_db.connect(""),
+                address=gateway_address,
+                standard_event_types=gateway_events.standard_event_types,
+                event_builders=gateway_events.event_builders,
+            )
+        else:
+            return self.gateway_proxies[gateway_address]
+
+    def get_event_selector_for_escrow(self, escrow_address):
+        """return either a EscrowProxy or a EthindexDB instance
+        This is being used from relay.api to query for events.
+        """
+        if self.use_eth_index:
+            return ethindex_db.EthindexDB(
+                ethindex_db.connect(""),
+                address=escrow_address,
+                standard_event_types=escrow_events.standard_event_types,
+                event_builders=escrow_events.event_builders,
+                from_to_types=escrow_events.from_to_types,
+            )
+        else:
+            return self.escrow_proxies[escrow_address]
 
     def get_event_selector_for_token(self, address):
         """return either a proxy or a EthindexDB instance
@@ -174,6 +217,12 @@ class TrustlinesRelay:
     def is_currency_network(self, address: str) -> bool:
         return address in self.network_addresses
 
+    def is_gateway(self, address: str) -> bool:
+        return address in self.gateway_addresses
+
+    def is_escrow(self, address: str) -> bool:
+        return address in self.escrow_addresses
+
     def is_currency_network_frozen(self, address: str) -> bool:
         return self.currency_network_proxies[address].is_frozen
 
@@ -187,6 +236,15 @@ class TrustlinesRelay:
         return [
             self.get_network_info(network_address)
             for network_address in self.network_addresses
+        ]
+
+    def get_gateway(self, gateway_address: str):
+        return self.gateway_proxies[gateway_address]
+
+    def get_gateway_list(self):
+        return [
+            self.get_gateway(gateway_address)
+            for gateway_address in self.gateway_addresses
         ]
 
     def get_users_of_network(self, network_address: str):
@@ -255,6 +313,24 @@ class TrustlinesRelay:
             prevent_mediator_interests=currency_network_proxy.prevent_mediator_interests,
         )
         self._start_listen_network(address)
+
+    def new_escrow(self, address: str) -> None:
+        assert is_checksum_address(address)
+        if address not in self.escrow_addresses:
+            logger.info("New escrow contract: {}".format(address))
+            self.escrow_proxies[address] = EscrowProxy(
+                self._web3, self.contracts["Escrow"]["abi"], address
+            )
+            self._start_listen_escrow(address)
+
+    def new_gateway(self, address: str) -> None:
+        assert is_checksum_address(address)
+        if address not in self.gateway_addresses:
+            logger.info("New gateway contract: {}".format(address))
+            self.gateway_proxies[address] = GatewayProxy(
+                self._web3, self.contracts["CurrencyNetworkGateway"]["abi"], address
+            )
+            self._start_listen_gateway(address)
 
     def new_exchange(self, address: str) -> None:
         assert is_checksum_address(address)
@@ -387,6 +463,34 @@ class TrustlinesRelay:
             )
         return events
 
+    def get_escrow_events(
+        self, escrow_address: str, type: str = None, from_block: int = 0
+    ) -> List[BlockchainEvent]:
+        proxy = self.get_event_selector_for_escrow(escrow_address)
+        if type is not None:
+            events = proxy.get_events(
+                type, from_block=from_block, timeout=self.event_query_timeout
+            )
+        else:
+            events = proxy.get_all_events(
+                from_block=from_block, timeout=self.event_query_timeout
+            )
+        return events
+
+    def get_gateway_events(
+        self, gateway_address: str, type: str = None, from_block: int = 0
+    ) -> List[BlockchainEvent]:
+        proxy = self.get_event_selector_for_gateway(gateway_address)
+        if type is not None:
+            events = proxy.get_events(
+                type, from_block=from_block, timeout=self.event_query_timeout
+            )
+        else:
+            events = proxy.get_all_events(
+                from_block=from_block, timeout=self.event_query_timeout
+            )
+        return events
+
     def get_user_events(
         self,
         user_address: str,
@@ -404,8 +508,14 @@ class TrustlinesRelay:
         exchange_event_queries = self._get_exchange_event_queries(
             user_address, type, from_block
         )
+        escrow_event_queries = self._get_escrow_event_queries(
+            user_address, type, from_block
+        )
         results = concurrency_utils.joinall(
-            network_event_queries + unw_eth_event_queries + exchange_event_queries,
+            network_event_queries
+            + unw_eth_event_queries
+            + exchange_event_queries
+            + escrow_event_queries,
             timeout=timeout,
         )
         return sorted_events(list(itertools.chain.from_iterable(results)))
@@ -432,6 +542,32 @@ class TrustlinesRelay:
                 queries.append(
                     functools.partial(
                         currency_network_proxy.get_all_network_events,
+                        user_address=user_address,
+                        from_block=from_block,
+                    )
+                )
+        return queries
+
+    def _get_escrow_event_queries(
+        self, user_address: str, type: str = None, from_block: int = 0
+    ):
+        assert is_checksum_address(user_address)
+        queries = []
+        for escrow_address in self.escrow_addresses:
+            escrow_proxy = self.get_event_selector_for_escrow(escrow_address)
+            if type is not None and type in escrow_proxy.event_types:
+                queries.append(
+                    functools.partial(
+                        escrow_proxy.get_escrow_events,
+                        type,
+                        user_address=user_address,
+                        from_block=from_block,
+                    )
+                )
+            else:
+                queries.append(
+                    functools.partial(
+                        escrow_proxy.get_all_escrow_events,
                         user_address=user_address,
                         from_block=from_block,
                     )
@@ -594,9 +730,14 @@ class TrustlinesRelay:
             self.fixed_gas_price = fixed_gas_price
 
     def _load_contracts(self):
-        with open(
-            os.path.join(sys.prefix, "trustlines-contracts", "build", "contracts.json")
-        ) as data_file:
+        if self.config.get("contractsPath") is not None:
+            contracts_path = self.config.get("contractsPath")
+        else:
+            contracts_path = os.path.join(
+                sys.prefix, "trustlines-contracts", "build", "contracts.json"
+            )
+
+        with open(contracts_path) as data_file:
             self.contracts = json.load(data_file)
 
     def _load_orderbook(self):
@@ -618,6 +759,15 @@ class TrustlinesRelay:
         network_addresses = addresses.get("networks", [])
         for address in network_addresses:
             self.new_network(to_checksum_address(address))
+
+        gateway_addresses = addresses.get("network_gateways", [])
+        for address in gateway_addresses:
+            self.new_gateway(to_checksum_address(address))
+
+        escrow_addresses = addresses.get("gateway_escrows", [])
+        for address in escrow_addresses:
+            self.new_escrow(to_checksum_address(address))
+
         exchange_address = addresses.get("exchange", None)
         if exchange_address is not None:
             self.new_exchange(to_checksum_address(exchange_address))
@@ -646,6 +796,18 @@ class TrustlinesRelay:
             self._process_trustline_request_cancel
         )
         proxy.start_listen_on_network_freeze(self._process_network_freeze)
+
+    def _start_listen_escrow(self, address):
+        assert is_checksum_address(address)
+        proxy = self.escrow_proxies[address]
+        proxy.start_listen_on_deposited(self._process_deposited)
+        proxy.start_listen_on_withdrawn(self._process_withdrawn)
+        proxy.start_listen_on_deposit_transferred(self._process_deposit_transferred)
+
+    def _start_listen_gateway(self, address):
+        assert is_checksum_address(address)
+        proxy = self.gateway_proxies[address]
+        proxy.start_listen_on_exchange_rate_changed(self._process_exchange_rate_changed)
 
     def _start_listen_on_new_addresses(self):
         def listen():
@@ -774,6 +936,21 @@ class TrustlinesRelay:
             network_address=trustline_update_event.network_address,
             timestamp=trustline_update_event.timestamp,
         )
+
+    def _process_deposited(self, deposited_event):
+        logger.debug("Process deposited event")
+        self._publish_blockchain_event(deposited_event)
+
+    def _process_withdrawn(self, withdrawn_event):
+        logger.debug("Process withdrawn event")
+        self._publish_blockchain_event(withdrawn_event)
+
+    def _process_deposit_transferred(self, deposit_transferred_event):
+        logger.debug("Process deposit transferred event")
+        self._publish_blockchain_event(deposit_transferred_event)
+
+    def _process_exchange_rate_changed(self, exchange_rate_changed_event):
+        logger.debug("Process exchange rate changed event")
 
     def _publish_blockchain_event(self, event):
         for user in [event.from_, event.to]:

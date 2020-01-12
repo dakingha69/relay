@@ -20,6 +20,7 @@ from relay.blockchain.delegate import (
     InvalidMetaTransactionException,
     UnknownIdentityFactoryException,
 )
+from relay.blockchain.escrow_proxy import EscrowProxy
 from relay.blockchain.unw_eth_proxy import UnwEthProxy
 from relay.concurrency_utils import TimeoutException
 from relay.network_graph.payment_path import FeePayer, PaymentPath
@@ -31,6 +32,9 @@ from .schemas import (
     AnyEventSchema,
     CurrencyNetworkEventSchema,
     CurrencyNetworkSchema,
+    EscrowEventSchema,
+    GatewayEventSchema,
+    GatewaySchema,
     IdentityInfosSchema,
     MetaTransactionFeeSchema,
     MetaTransactionSchema,
@@ -49,6 +53,16 @@ TIMEOUT_MESSAGE = "The server could not handle the request in time"
 def abort_if_unknown_network(trustlines, network_address):
     if not trustlines.is_currency_network(network_address):
         abort(404, "Unknown network: {}".format(network_address))
+
+
+def abort_if_unknown_gateway(trustlines, gateway_address):
+    if not trustlines.is_gateway(gateway_address):
+        abort(404, "Unknown gateway: {}".format(gateway_address))
+
+
+def abort_if_unknown_escrow(trustlines, escrow_address):
+    if not trustlines.is_escrow(escrow_address):
+        abort(404, "Unknown escrow: {}".format(escrow_address))
 
 
 def abort_if_frozen_network(trustlines, network_address):
@@ -94,6 +108,34 @@ class Network(Resource):
     def get(self, network_address: str):
         abort_if_unknown_network(self.trustlines, network_address)
         return self.trustlines.get_network_info(network_address)
+
+
+class GatewayList(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    @dump_result_with_schema(GatewaySchema(many=True))
+    def get(self):
+        return self.trustlines.get_gateway_list()
+
+
+class Gateway(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    @dump_result_with_schema(GatewaySchema())
+    def get(self, gateway_address: str):
+        abort_if_unknown_gateway(self.trustlines, gateway_address)
+        return self.trustlines.get_gateway(gateway_address)
+
+
+class GatewayDeposit(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    def get(self, gateway_address: str, user_address: str):
+        abort_if_unknown_gateway(self.trustlines, gateway_address)
+        return self.trustlines.get_gateway(gateway_address).deposits_of(user_address)
 
 
 class UserList(Resource):
@@ -308,6 +350,70 @@ class EventsNetwork(Resource):
         except TimeoutException:
             logger.warning(
                 "Network events: event_name=%s from_block=%s. could not get events in time",
+                type,
+                from_block,
+            )
+            abort(504, TIMEOUT_MESSAGE)
+
+
+class EventsEscrow(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    args = {
+        "fromBlock": fields.Int(required=False, missing=0),
+        "type": fields.Str(
+            required=False,
+            validate=validate.OneOf(EscrowProxy.event_types),
+            missing=None,
+        ),
+    }
+
+    @use_args(args)
+    @dump_result_with_schema(EscrowEventSchema(many=True))
+    def get(self, args, escrow_address: str):
+        abort_if_unknown_escrow(self.trustlines, escrow_address)
+        from_block = args["fromBlock"]
+        type = args["type"]
+        try:
+            return self.trustlines.get_escrow_events(
+                escrow_address, type=type, from_block=from_block
+            )
+        except TimeoutException:
+            logger.warning(
+                "Escrow events: event_name=%s from_block=%s. could not get events in time",
+                type,
+                from_block,
+            )
+            abort(504, TIMEOUT_MESSAGE)
+
+
+class EventsGateway(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    args = {
+        "fromBlock": fields.Int(required=False, missing=0),
+        "type": fields.Str(
+            required=False,
+            validate=validate.OneOf(CurrencyNetworkProxy.event_types),
+            missing=None,
+        ),
+    }
+
+    @use_args(args)
+    @dump_result_with_schema(GatewayEventSchema(many=True))
+    def get(self, args, gateway_address: str):
+        abort_if_unknown_gateway(self.trustlines, gateway_address)
+        from_block = args["fromBlock"]
+        type = args["type"]
+        try:
+            return self.trustlines.get_gateway_events(
+                gateway_address, type=type, from_block=from_block
+            )
+        except TimeoutException:
+            logger.warning(
+                "Gateway events: event_name=%s from_block=%s. could not get events in time",
                 type,
                 from_block,
             )
