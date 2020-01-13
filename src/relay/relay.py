@@ -802,7 +802,6 @@ class TrustlinesRelay:
         proxy = self.escrow_proxies[address]
         proxy.start_listen_on_deposited(self._process_deposited)
         proxy.start_listen_on_withdrawn(self._process_withdrawn)
-        proxy.start_listen_on_deposit_transferred(self._process_deposit_transferred)
 
     def _start_listen_gateway(self, address):
         assert is_checksum_address(address)

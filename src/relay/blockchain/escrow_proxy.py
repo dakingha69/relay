@@ -7,7 +7,6 @@ import relay.concurrency_utils as concurrency_utils
 
 from .escrow_events import (
     DepositedEventType,
-    DepositTransferredEventType,
     EscrowEvent,
     WithdrawnEventType,
     event_builders,
@@ -50,15 +49,10 @@ class EscrowProxy(Proxy):
             events = concurrency_utils.joinall(queries, timeout=timeout)
         else:
             filter1 = {from_to_types[event_name][0]: user_address}
-            filter2 = {from_to_types[event_name][1]: user_address}
 
             queries = [
                 functools.partial(self.get_events, event_name, filter1, from_block)
             ]
-            if event_name == DepositTransferredEventType:
-                queries.append(
-                    functools.partial(self.get_events, event_name, filter2, from_block)
-                )
             results = concurrency_utils.joinall(queries, timeout=timeout)
 
             events = list(itertools.chain.from_iterable(results))
@@ -96,9 +90,3 @@ class EscrowProxy(Proxy):
             on_withdrawn(self._build_event(log_entry))
 
         self.start_listen_on(WithdrawnEventType, log)
-
-    def start_listen_on_deposit_transferred(self, on_deposit_transferred):
-        def log(log_entry):
-            on_deposit_transferred(self._build_event(log_entry))
-
-        self.start_listen_on(DepositTransferredEventType, log)

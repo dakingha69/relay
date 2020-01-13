@@ -2,7 +2,6 @@ from .events import TLNetworkEvent
 
 DepositedEventType = "Deposited"
 WithdrawnEventType = "Withdrawn"
-DepositTransferredEventType = "DepositTransferred"
 
 
 class EscrowEvent(TLNetworkEvent):
@@ -29,25 +28,15 @@ class WithdrawnEvent(DepositedEvent):
     pass
 
 
-class DepositTransferredEvent(WeiAmountEvent):
-    pass
-
-
 event_builders = {
     DepositedEventType: DepositedEvent,
     WithdrawnEventType: WithdrawnEvent,
-    DepositTransferredEventType: DepositTransferredEvent,
 }
 
 
 from_to_types = {
     DepositedEventType: ["payee", "payee"],
     WithdrawnEventType: ["payee", "payee"],
-    DepositTransferredEventType: ["from", "to"],
 }
 
-standard_event_types = [
-    DepositedEventType,
-    WithdrawnEventType,
-    DepositTransferredEventType,
-]
+standard_event_types = [DepositedEventType, WithdrawnEventType]
