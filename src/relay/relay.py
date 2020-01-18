@@ -33,6 +33,7 @@ from .blockchain import (
     escrow_events,
     exchange_events,
     gateway_events,
+    shield_events,
     token_events,
     unw_eth_events,
 )
@@ -44,6 +45,7 @@ from .blockchain.exchange_proxy import ExchangeProxy
 from .blockchain.gateway_proxy import GatewayProxy
 from .blockchain.node import Node
 from .blockchain.proxy import sorted_events
+from .blockchain.shield_proxy import ShieldProxy
 from .blockchain.token_proxy import TokenProxy
 from .blockchain.unw_eth_proxy import UnwEthProxy
 from .events import BalanceEvent, NetworkBalanceEvent
@@ -76,6 +78,7 @@ class TrustlinesRelay:
         self.token_proxies: Dict[str, TokenProxy] = {}
         self.gateway_proxies: Dict[str, GatewayProxy] = {}
         self.escrow_proxies: Dict[str, EscrowProxy] = {}
+        self.shield_proxies: Dict[str, ShieldProxy] = {}
         self._firebase_raw_push_service: Optional[FirebaseRawPushService] = None
         self._client_token_db: Optional[ClientTokenDB] = None
         self.fixed_gas_price: Optional[int] = None
@@ -92,6 +95,10 @@ class TrustlinesRelay:
     @property
     def escrow_addresses(self) -> Iterable[str]:
         return self.escrow_proxies.keys()
+
+    @property
+    def shield_addresses(self) -> Iterable[str]:
+        return self.shield_proxies.keys()
 
     @property
     def exchange_addresses(self) -> Iterable[str]:
@@ -139,6 +146,20 @@ class TrustlinesRelay:
             )
         else:
             return self.currency_network_proxies[network_address]
+
+    def get_event_selector_for_shield(self, shield_address):
+        """return either a ShieldProxy or a EthindexDB instance
+        This is being used from relay.api to query for events.
+        """
+        if self.use_eth_index:
+            return ethindex_db.EthindexDB(
+                ethindex_db.connect(""),
+                address=shield_address,
+                standard_event_types=shield_events.standard_event_types,
+                event_builders=shield_events.event_builders,
+            )
+        else:
+            return self.gateway_proxies[shield_address]
 
     def get_event_selector_for_gateway(self, gateway_address):
         """return either a GatewayProxy or a EthindexDB instance
@@ -217,6 +238,9 @@ class TrustlinesRelay:
     def is_currency_network(self, address: str) -> bool:
         return address in self.network_addresses
 
+    def is_shield(self, address: str) -> bool:
+        return address in self.shield_addresses
+
     def is_gateway(self, address: str) -> bool:
         return address in self.gateway_addresses
 
@@ -237,6 +261,26 @@ class TrustlinesRelay:
             self.get_network_info(network_address)
             for network_address in self.network_addresses
         ]
+
+    def get_shield(self, shield_address: str):
+        return self.shield_proxies[shield_address]
+
+    def get_shield_list(self):
+        return [
+            self.get_shield(shield_address) for shield_address in self.shield_addresses
+        ]
+
+    def get_shield_nullifier(self, shield_address: str, nullifier: str):
+        return self.shield_proxies[shield_address].nullifiers(nullifier)
+
+    def get_shield_root(self, shield_address: str, root: str):
+        return self.shield_proxies[shield_address].roots(root)
+
+    def get_shield_vk(self, shield_address: str, transaction_type: str):
+        return self.shield_proxies[shield_address].vk_of(transaction_type)
+
+    def get_shield_vk_list(self, shield_address: str):
+        return self.shield_proxies[shield_address].vk_list()
 
     def get_gateway(self, gateway_address: str):
         return self.gateway_proxies[gateway_address]
@@ -313,6 +357,15 @@ class TrustlinesRelay:
             prevent_mediator_interests=currency_network_proxy.prevent_mediator_interests,
         )
         self._start_listen_network(address)
+
+    def new_shield(self, address: str) -> None:
+        assert is_checksum_address(address)
+        if address not in self.shield_addresses:
+            logger.info("New shield contract: {}".format(address))
+            self.shield_proxies[address] = ShieldProxy(
+                self._web3, self.contracts["CurrencyNetworkShield"]["abi"], address
+            )
+            self._start_listen_shield(address)
 
     def new_escrow(self, address: str) -> None:
         assert is_checksum_address(address)
@@ -481,6 +534,20 @@ class TrustlinesRelay:
         self, gateway_address: str, type: str = None, from_block: int = 0
     ) -> List[BlockchainEvent]:
         proxy = self.get_event_selector_for_gateway(gateway_address)
+        if type is not None:
+            events = proxy.get_events(
+                type, from_block=from_block, timeout=self.event_query_timeout
+            )
+        else:
+            events = proxy.get_all_events(
+                from_block=from_block, timeout=self.event_query_timeout
+            )
+        return events
+
+    def get_shield_events(
+        self, shield_address: str, type: str = None, from_block: int = 0
+    ) -> List[BlockchainEvent]:
+        proxy = self.get_event_selector_for_shield(shield_address)
         if type is not None:
             events = proxy.get_events(
                 type, from_block=from_block, timeout=self.event_query_timeout
@@ -760,6 +827,10 @@ class TrustlinesRelay:
         for address in network_addresses:
             self.new_network(to_checksum_address(address))
 
+        shield_addresses = addresses.get("network_shields", [])
+        for address in shield_addresses:
+            self.new_shield(to_checksum_address(address))
+
         gateway_addresses = addresses.get("network_gateways", [])
         for address in gateway_addresses:
             self.new_gateway(to_checksum_address(address))
@@ -807,6 +878,10 @@ class TrustlinesRelay:
         assert is_checksum_address(address)
         proxy = self.gateway_proxies[address]
         proxy.start_listen_on_exchange_rate_changed(self._process_exchange_rate_changed)
+
+    def _start_listen_shield(self, address):
+        assert is_checksum_address(address)
+        # TODO
 
     def _start_listen_on_new_addresses(self):
         def listen():

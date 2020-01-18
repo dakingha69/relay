@@ -2,6 +2,7 @@ import logging
 import tempfile
 import time
 
+import hexbytes
 import wrapt
 from flask import abort, make_response, request, send_file
 from flask.views import MethodView
@@ -21,6 +22,8 @@ from relay.blockchain.delegate import (
     UnknownIdentityFactoryException,
 )
 from relay.blockchain.escrow_proxy import EscrowProxy
+from relay.blockchain.gateway_proxy import GatewayProxy
+from relay.blockchain.shield_proxy import ShieldProxy
 from relay.blockchain.unw_eth_proxy import UnwEthProxy
 from relay.concurrency_utils import TimeoutException
 from relay.network_graph.payment_path import FeePayer, PaymentPath
@@ -39,6 +42,8 @@ from .schemas import (
     MetaTransactionFeeSchema,
     MetaTransactionSchema,
     PaymentPathSchema,
+    ShieldEventSchema,
+    ShieldSchema,
     TrustlineSchema,
     TxInfosSchema,
     UserCurrencyNetworkEventSchema,
@@ -53,6 +58,11 @@ TIMEOUT_MESSAGE = "The server could not handle the request in time"
 def abort_if_unknown_network(trustlines, network_address):
     if not trustlines.is_currency_network(network_address):
         abort(404, "Unknown network: {}".format(network_address))
+
+
+def abort_if_unknown_shield(trustlines, shield_address):
+    if not trustlines.is_shield(shield_address):
+        abort(404, "Unknown shield: {}".format(shield_address))
 
 
 def abort_if_unknown_gateway(trustlines, gateway_address):
@@ -108,6 +118,69 @@ class Network(Resource):
     def get(self, network_address: str):
         abort_if_unknown_network(self.trustlines, network_address)
         return self.trustlines.get_network_info(network_address)
+
+
+class Shield(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    @dump_result_with_schema(ShieldSchema())
+    def get(self, shield_address: str):
+        abort_if_unknown_shield(self.trustlines, shield_address)
+        return self.trustlines.get_shield(shield_address)
+
+
+class ShieldList(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    @dump_result_with_schema(ShieldSchema(many=True))
+    def get(self):
+        return self.trustlines.get_shield_list()
+
+
+class ShieldNullifier(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    def get(self, shield_address: str, nullifier: str):
+        abort_if_unknown_shield(self.trustlines, shield_address)
+        nullifier_hex_bytes = self.trustlines.get_shield_nullifier(
+            shield_address, hexbytes.HexBytes(nullifier)
+        )
+        return "0x" + nullifier_hex_bytes.hex()
+
+
+class ShieldRoot(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    def get(self, shield_address: str, root: str):
+        abort_if_unknown_shield(self.trustlines, shield_address)
+        root_hex_bytes = self.trustlines.get_shield_root(
+            shield_address, hexbytes.HexBytes(root)
+        )
+        return "0x" + root_hex_bytes.hex()
+
+
+class ShieldVerificationKey(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    def get(self, shield_address: str, transaction_type: str):
+        abort_if_unknown_shield(self.trustlines, shield_address)
+        return self.trustlines.get_shield_vk(
+            shield_address, transaction_type.capitalize()
+        )
+
+
+class ShieldVerificationKeyList(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    def get(self, shield_address: str):
+        abort_if_unknown_shield(self.trustlines, shield_address)
+        return self.trustlines.get_shield_vk_list(shield_address)
 
 
 class GatewayList(Resource):
@@ -396,7 +469,7 @@ class EventsGateway(Resource):
         "fromBlock": fields.Int(required=False, missing=0),
         "type": fields.Str(
             required=False,
-            validate=validate.OneOf(CurrencyNetworkProxy.event_types),
+            validate=validate.OneOf(GatewayProxy.event_types),
             missing=None,
         ),
     }
@@ -414,6 +487,38 @@ class EventsGateway(Resource):
         except TimeoutException:
             logger.warning(
                 "Gateway events: event_name=%s from_block=%s. could not get events in time",
+                type,
+                from_block,
+            )
+            abort(504, TIMEOUT_MESSAGE)
+
+
+class EventsShield(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    args = {
+        "fromBlock": fields.Int(required=False, missing=0),
+        "type": fields.Str(
+            required=False,
+            validate=validate.OneOf(ShieldProxy.event_types),
+            missing=None,
+        ),
+    }
+
+    @use_args(args)
+    @dump_result_with_schema(ShieldEventSchema(many=True))
+    def get(self, args, shield_address: str):
+        abort_if_unknown_shield(self.trustlines, shield_address)
+        from_block = args["fromBlock"]
+        type = args["type"]
+        try:
+            return self.trustlines.get_shield_events(
+                shield_address, type=type, from_block=from_block
+            )
+        except TimeoutException:
+            logger.warning(
+                "Shield events: event_name=%s from_block=%s. could not get events in time",
                 type,
                 from_block,
             )

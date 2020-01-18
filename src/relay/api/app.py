@@ -29,6 +29,7 @@ from .resources import (
     EventsEscrow,
     EventsGateway,
     EventsNetwork,
+    EventsShield,
     Factories,
     Gateway,
     GatewayDeposit,
@@ -44,6 +45,12 @@ from .resources import (
     Relay,
     RelayMetaTransaction,
     RequestEther,
+    Shield,
+    ShieldList,
+    ShieldNullifier,
+    ShieldRoot,
+    ShieldVerificationKey,
+    ShieldVerificationKeyList,
     TransactionInfos,
     Trustline,
     TrustlineList,
@@ -169,6 +176,9 @@ def ApiApp(trustlines):
         "/pushnotifications/<address:user_address>/token/<string:client_token>",
     )
 
+    """
+    gateway and escrow resources
+    """
     add_resource(GatewayList, "/gateways")
 
     add_resource(Gateway, "/gateways/<address:gateway_address>")
@@ -181,6 +191,23 @@ def ApiApp(trustlines):
     add_resource(EventsGateway, "/gateways/<address:gateway_address>/events")
 
     add_resource(EventsEscrow, "/escrows/<address:escrow_address>/events")
+
+    """
+    shield contract resources
+    """
+    add_resource(ShieldList, "/shields")
+    add_resource(EventsShield, "/shields/<address:shield_address>/events")
+    add_resource(Shield, "/shields/<address:shield_address>")
+    add_resource(
+        ShieldNullifier,
+        "/shields/<address:shield_address>/nullifiers/<string:nullifier>",
+    )
+    add_resource(ShieldRoot, "/shields/<address:shield_address>/roots/<string:root>")
+    add_resource(
+        ShieldVerificationKey,
+        "/shields/<address:shield_address>/vks/<string:transaction_type>",
+    )
+    add_resource(ShieldVerificationKeyList, "/shields/<address:shield_address>/vks")
 
     api_bp.add_url_rule(
         "/networks/<address:network_address>/image",

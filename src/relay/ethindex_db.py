@@ -13,6 +13,7 @@ from relay.blockchain import (
     escrow_events,
     exchange_events,
     gateway_events,
+    shield_events,
     token_events,
     unw_eth_events,
 )
@@ -195,6 +196,16 @@ class EthindexDB:
         """Function for compatibility with relay.blockchain.ExchangeProxy. Will be removed after a refactoring"""
         return self.get_user_events(event_name, user_address, from_block, timeout)
 
+    def get_shield_events(
+        self,
+        event_name: str,
+        user_address: str = None,
+        from_block: int = 0,
+        timeout: float = None,
+    ) -> List[BlockchainEvent]:
+        """Function for compatibility with relay.blockchain.ShieldProxy. Will be removed after a refactoring"""
+        return self.get_user_events(event_name, user_address, from_block, timeout)
+
     def get_gateway_events(
         self,
         event_name: str,
@@ -298,6 +309,13 @@ class EthindexDB:
     ) -> List[BlockchainEvent]:
         return self.get_all_contract_events(
             gateway_events.standard_event_types, user_address, from_block, timeout
+        )
+
+    def get_all_shield_events(
+        self, user_address: str = None, from_block: int = 0, timeout: float = None
+    ) -> List[BlockchainEvent]:
+        return self.get_all_contract_events(
+            shield_events.standard_event_types, user_address, from_block, timeout
         )
 
     def get_all_exchange_events(

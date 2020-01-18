@@ -25,8 +25,8 @@ class GatewayProxy(Proxy):
     def __init__(self, web3, gateway_abi, address: str) -> None:
         super().__init__(web3, gateway_abi, address)
         self.exchange_rate: int = self._proxy.functions.exchangeRate().call()
-        self.escrow_address: str = self._proxy.functions.escrowAddress().call()
-        self.gated_currency_network_address: str = self._proxy.functions.gatedCurrencyNetworkAddress().call()
+        self.escrow_address: str = self._proxy.functions.getEscrow().call()
+        self.gated_currency_network_address: str = self._proxy.functions.getCurrencyNetwork().call()
 
     def deposits_of(self, user_address: str):
         return self._proxy.functions.depositsOf(user_address).call()

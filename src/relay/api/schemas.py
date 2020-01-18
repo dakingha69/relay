@@ -7,6 +7,7 @@ from relay.blockchain.currency_network_events import CurrencyNetworkEvent
 from relay.blockchain.escrow_events import EscrowEvent
 from relay.blockchain.exchange_events import ExchangeEvent
 from relay.blockchain.gateway_events import GatewayEvent
+from relay.blockchain.shield_events import ShieldEvent
 from relay.blockchain.unw_eth_events import UnwEthEvent
 from relay.network_graph.payment_path import PaymentPath
 
@@ -139,6 +140,24 @@ class EscrowEventSchema(BlockchainEventSchema):
     to = Address(attribute="to")
 
 
+class ShieldEventSchema(BlockchainEventSchema):
+    shieldAddress = Address(attribute="shield_address")
+    root = HexBytes(attribute="root")
+    leafIndex = BigInteger(attribute="leaf_index")
+    leafValue = HexBytes(attribute="leaf_value")
+    minLeafIndex = BigInteger(attribute="min_leaf_index")
+    leafValues = fields.List(HexBytes(), attribute="leaf_values")
+    nullifier_1 = HexBytes(attribute="nullifier_1")
+    nullifier_2 = HexBytes(attribute="nullifier_2")
+    nullifier = HexBytes(attribute="nullifier")
+    newVerifier = Address(attribute="new_verifier")
+    txType = fields.Str(attribute="tx_type")
+    newGateway = Address(attribute="new_gateway")
+    byShieldContract = BigInteger(attribute="by_shield_contract")
+    byVerifierContract = BigInteger(attribute="by_verifier_contract")
+    byCurrencyNetworkContract = BigInteger(attribute="by_currencyNetwork_contract")
+
+
 class AnyEventSchema(OneOfSchema):
     type_schemas = {
         "CurrencyNetworkEvent": UserCurrencyNetworkEventSchema,
@@ -146,6 +165,7 @@ class AnyEventSchema(OneOfSchema):
         "ExchangeEvent": ExchangeEventSchema,
         "GatewayEvent": GatewayEventSchema,
         "EscrowEvent": EscrowEventSchema,
+        "ShieldEvent": ShieldEventSchema,
     }
 
     type_field = "__class__"
@@ -161,6 +181,8 @@ class AnyEventSchema(OneOfSchema):
             return "GatewayEvent"
         elif isinstance(obj, EscrowEvent):
             return "EscrowEvent"
+        elif isinstance(obj, ShieldEvent):
+            return "ShieldEvent"
 
         raise RuntimeError(f"Unknown object type: {obj.__class__.__name__}")
 
@@ -235,8 +257,21 @@ class GatewaySchema(Schema):
 
     exchangeRate = fields.Int(attribute="exchange_rate")
     address = Address()
-    escrowAddress = fields.Str(attribute="escrow_address")
-    gatedNetworkAddress = fields.Str(attribute="gated_currency_network_address")
+    escrowAddress = Address(attribute="escrow_address")
+    gatedNetworkAddress = Address(attribute="gated_currency_network_address")
+
+
+class ShieldSchema(Schema):
+    class Meta:
+        strict = True
+
+    address = Address()
+    escrowAddress = Address(attribute="escrow_address")
+    networkAddress = Address(attribute="network_address")
+    verifierAddress = Address(attribute="verifier_address")
+    treeHeight = fields.Int(attribute="tree_height")
+    treeWidth = fields.Int(attribute="tree_width")
+    leafCount = fields.Int(attribute="leaf_count")
 
 
 class PaymentPathSchema(Schema):
