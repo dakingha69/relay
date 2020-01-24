@@ -45,12 +45,26 @@ class ShieldProxy(Proxy):
         index = transaction_types.index(transaction_type)
         return self._proxy.functions.getVerificationKey(index).call()
 
+    # TODO
     def get_shield_events(
         self, event_name: str, from_block: int = 0, timeout: float = None
     ) -> List[BlockchainEvent]:
         return []
 
+    # TODO
     def get_all_shield_events(
         self, from_block: int = 0, timeout: float = None
+    ) -> List[BlockchainEvent]:
+        return []
+
+    # TODO
+    def get_leaf_by_index(
+        self, leaf_index: int, timeout: float = None, shield_address: str = None
+    ) -> List[BlockchainEvent]:
+        return []
+
+    # TODO
+    def get_leaves_by_index(
+        self, leaf_index: int, timeout: float = None, shield_address: str = None
     ) -> List[BlockchainEvent]:
         return []

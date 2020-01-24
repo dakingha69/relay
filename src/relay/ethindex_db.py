@@ -349,6 +349,57 @@ class EthindexDB:
         ]
         return sorted_events(list(itertools.chain.from_iterable(results)))
 
+    def get_leaf_by_index(
+        self, leaf_index: int, timeout: float = None, shield_address: str = None
+    ) -> BlockchainEvent:
+        shield_address = self._get_addr(shield_address)
+
+        # query "NewLeaf" events
+        query = EventsQuery(
+            """eventName=%s
+               AND address=%s
+               AND args @> %s""",
+            (
+                "NewLeaf",
+                shield_address,
+                psycopg2.extras.Json({"leafIndex": leaf_index}),
+            ),
+        )
+        events = self._run_events_query(query)
+
+        logger.debug(
+            "get_leaf_by_index(%s, %s, %s) -> %s rows",
+            leaf_index,
+            timeout,
+            shield_address,
+            len(events),
+        )
+
+        return events
+
+    def get_leaves_by_index(
+        self, leaf_index: int, timeout: float = None, shield_address: str = None
+    ) -> BlockchainEvent:
+        shield_address = self._get_addr(shield_address)
+
+        query = EventsQuery(
+            """eventName=%s
+                AND address=%s
+                AND (args->>'minLeafIndex')::int <= %s""",
+            ("NewLeaves", shield_address, psycopg2.extras.Json(leaf_index)),
+        )
+        events = self._run_events_query(query)
+
+        logger.debug(
+            "get_leaves_by_index(%s, %s, %s) -> %s rows",
+            leaf_index,
+            timeout,
+            shield_address,
+            len(events),
+        )
+
+        return events
+
     def get_events(
         self,
         event_name,

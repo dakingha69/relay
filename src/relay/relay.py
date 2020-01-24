@@ -282,6 +282,28 @@ class TrustlinesRelay:
     def get_shield_vk_list(self, shield_address: str):
         return self.shield_proxies[shield_address].vk_list()
 
+    def get_leaves_by_leaf_index(self, shield_address: str, leaf_index: int):
+        """
+        Either returns `NewLeaf` event if existent or multiple `NewLeaves` events
+        where `minLeafIndex` is smaller or equal the given `leaf_index`.
+        TODO Filter out the correct leave for `NewLeaves` event.
+        It is currently handled on the client.
+        """
+        proxy = self.get_event_selector_for_shield(shield_address)
+        leaves = proxy.get_leaf_by_index(
+            leaf_index=leaf_index, shield_address=shield_address
+        )
+
+        if len(leaves) == 0:
+            leaves = proxy.get_leaves_by_index(
+                leaf_index=leaf_index, shield_address=shield_address
+            )
+
+        if len(leaves) == 0:
+            leaves = [{}]
+
+        return leaves
+
     def get_gateway(self, gateway_address: str):
         return self.gateway_proxies[gateway_address]
 
@@ -881,7 +903,7 @@ class TrustlinesRelay:
 
     def _start_listen_shield(self, address):
         assert is_checksum_address(address)
-        # TODO
+        # proxy = self.shield_proxies[address]
 
     def _start_listen_on_new_addresses(self):
         def listen():
@@ -1018,10 +1040,6 @@ class TrustlinesRelay:
     def _process_withdrawn(self, withdrawn_event):
         logger.debug("Process withdrawn event")
         self._publish_blockchain_event(withdrawn_event)
-
-    def _process_deposit_transferred(self, deposit_transferred_event):
-        logger.debug("Process deposit transferred event")
-        self._publish_blockchain_event(deposit_transferred_event)
 
     def _process_exchange_rate_changed(self, exchange_rate_changed_event):
         logger.debug("Process exchange rate changed event")
