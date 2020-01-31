@@ -183,33 +183,50 @@ class ShieldVerificationKeyList(Resource):
         return self.trustlines.get_shield_vk_list(shield_address)
 
 
-class LeafByLeafIndex(Resource):
+class MerkleTreeLeaves(Resource):
     def __init__(self, trustlines: TrustlinesRelay) -> None:
         self.trustlines = trustlines
 
-    args = {"leafIndex": fields.Int(required=True)}
-
-    @use_args(args)
-    @dump_result_with_schema(ShieldEventSchema(many=True))
-    def get(self, args, shield_address: str):
-        abort_if_unknown_shield(self.trustlines, shield_address)
-        return self.trustlines.get_leaves_by_leaf_index(
-            shield_address=shield_address, leaf_index=args["leafIndex"]
-        )
-
-
-class SiblingPathByLeafIndex(Resource):
-    def __init__(self, trustlines: TrustlinesRelay) -> None:
-        self.trustlines = trustlines
-
-    args = {"leafIndex": fields.Str(required=True)}
+    args = {
+        "leafIndex": fields.Int(missing=None),
+        "leafIndices": fields.DelimitedList(fields.Int(), missing=None),
+    }
 
     @use_args(args)
     def get(self, args, shield_address: str):
         abort_if_unknown_shield(self.trustlines, shield_address)
-        return self.trustlines.get_sibling_path_by_leaf_index(
-            shield_address=shield_address, leaf_index=args["leafIndex"]
-        )
+        if args["leafIndex"] is not None:
+            return self.trustlines.get_leaf_by_leaf_index(
+                shield_address=shield_address, leaf_index=args["leafIndex"]
+            )
+        elif args["leafIndices"] is not None:
+            return self.trustlines.get_leaves_by_leaf_indices(
+                shield_address=shield_address, leaf_indices=args["leafIndices"]
+            )
+        abort(500, "No query params. Specify leafIndex or leafIndices.")
+
+
+class MerkleTreeNodes(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    args = {
+        "nodeIndex": fields.Int(missing=None),
+        "nodeIndices": fields.DelimitedList(fields.Int(), missing=None),
+    }
+
+    @use_args(args)
+    def get(self, args, shield_address: str):
+        abort_if_unknown_shield(self.trustlines, shield_address)
+        if args["nodeIndex"] is not None:
+            return self.trustlines.get_node_by_node_index(
+                shield_address=shield_address, node_index=args["nodeIndex"]
+            )
+        elif args["nodeIndices"] is not None:
+            return self.trustlines.get_nodes_by_node_indices(
+                shield_address=shield_address, node_indices=args["nodeIndices"]
+            )
+        abort(500, "No query params. Specify nodeIndex or nodeIndices.")
 
 
 class GatewayList(Resource):

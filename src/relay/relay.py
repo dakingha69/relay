@@ -282,27 +282,33 @@ class TrustlinesRelay:
     def get_shield_vk_list(self, shield_address: str):
         return self.shield_proxies[shield_address].vk_list()
 
-    def get_leaves_by_leaf_index(self, shield_address: str, leaf_index: int):
-        """
-        Either returns `NewLeaf` event if existent or multiple `NewLeaves` events
-        where `minLeafIndex` is smaller or equal the given `leaf_index`.
-        TODO Filter out the correct leave for `NewLeaves` event.
-        It is currently handled on the client.
-        """
+    def get_leaf_by_leaf_index(self, shield_address: str, leaf_index: int):
         proxy = self.get_event_selector_for_shield(shield_address)
-        leaves = proxy.get_leaf_by_index(
-            leaf_index=leaf_index, shield_address=shield_address
+        leaf = proxy.get_leaf_by_leaf_index(
+            merkle_tree_address=shield_address, leaf_index=leaf_index
         )
+        return leaf
 
-        if len(leaves) == 0:
-            leaves = proxy.get_leaves_by_index(
-                leaf_index=leaf_index, shield_address=shield_address
-            )
-
-        if len(leaves) == 0:
-            leaves = [{}]
-
+    def get_leaves_by_leaf_indices(self, shield_address: str, leaf_indices: list):
+        proxy = self.get_event_selector_for_shield(shield_address)
+        leaves = proxy.get_leaves_by_leaf_indices(
+            merkle_tree_address=shield_address, leaf_indices=leaf_indices
+        )
         return leaves
+
+    def get_node_by_node_index(self, shield_address: str, node_index: int):
+        proxy = self.get_event_selector_for_shield(shield_address)
+        node = proxy.get_node_by_node_index(
+            merkle_tree_address=shield_address, node_index=node_index
+        )
+        return node
+
+    def get_nodes_by_node_indices(self, shield_address: str, node_indices: list):
+        proxy = self.get_event_selector_for_shield(shield_address)
+        nodes = proxy.get_nodes_by_node_indices(
+            merkle_tree_address=shield_address, node_indices=node_indices
+        )
+        return nodes
 
     def get_gateway(self, gateway_address: str):
         return self.gateway_proxies[gateway_address]

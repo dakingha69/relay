@@ -81,6 +81,36 @@ select_star_from_events = """SELECT transactionHash "transactionHash",
 order_by_default_sort_order = """ ORDER BY blocknumber, transactionIndex, logIndex
     """
 
+MerkleTreeNodesQuery = collections.namedtuple(
+    "MerkleTreeNodesQuery", ["where_block", "params"]
+)
+
+select_star_from_merkle_tree_nodes = """SELECT merkleTreeAddress "merkleTreeAddress",
+            blockNumber "blockNumber",
+            nodeIndex "nodeIndex",
+            leafIndex "leafIndex",
+            value
+        FROM merkle_tree_nodes
+    """
+
+order_by_default_sort_order_merkle_tree_nodes = """ ORDER BY nodeIndex """
+
+
+MerkleTreeMetadataQuery = collections.namedtuple(
+    "MerkleTreeMetadataQuery", ["where_block", "params"]
+)
+
+select_star_from_merkle_tree_metadata = """SELECT merkleTreeAddress "merkleTreeAddress",
+            treeHeight "treeHeight",
+            latestBlockNumber "latestBlockNumber",
+            latestRoot "latestRoot",
+            latestLeafIndex "latestLeafIndex",
+            latestFrontier "latestFrontier",
+        FROM merkle_tree_metadata
+    """
+
+order_by_default_sort_order_merkle_tree_metadata = """ ORDER BY merkleTreeAddress """
+
 
 class EthindexDB:
     """EthIndexDB provides a partly compatible interface for the
@@ -153,6 +183,42 @@ class EthindexDB:
                 cur.execute(query_string, events_query.params)
                 rows = cur.fetchall()
                 return self._build_events(rows)
+
+    def _run_merkle_tree_nodes_query(
+        self, merkle_tree_nodes_query: MerkleTreeNodesQuery
+    ) -> List[BlockchainEvent]:
+        """run a query on the merkle_tree_nodes table"""
+        query_string = """
+        {select_star_from_merkle_tree_nodes}
+        WHERE {where_block}
+        {order_by_default_sort_order_merkle_tree_nodes}""".format(
+            select_star_from_merkle_tree_nodes=select_star_from_merkle_tree_nodes,
+            where_block=merkle_tree_nodes_query.where_block,
+            order_by_default_sort_order_merkle_tree_nodes=order_by_default_sort_order_merkle_tree_nodes,
+        )
+
+        with self.conn as conn:
+            with conn.cursor() as cur:
+                cur.execute(query_string, merkle_tree_nodes_query.params)
+                return cur.fetchall()
+
+    def _run_merkle_tree_metadata_query(
+        self, merkle_tree_metadata_query: MerkleTreeMetadataQuery
+    ) -> List[BlockchainEvent]:
+        """run a query on the merkle_tree_metadata table"""
+        query_string = """
+        {select_star_from_merkle_tree_metadata}
+        WHERE {where_block}
+        {order_by_default_sort_order_merkle_tree_metadata}""".format(
+            select_star_from_merkle_tree_metadata=select_star_from_merkle_tree_metadata,
+            where_block=merkle_tree_metadata_query.where_block,
+            order_by_default_sort_order_merkle_tree_metadata=order_by_default_sort_order_merkle_tree_metadata,
+        )
+
+        with self.conn as conn:
+            with conn.cursor() as cur:
+                cur.execute(query_string, merkle_tree_metadata_query.params)
+                return cur.fetchall()
 
     def get_network_events(
         self,
@@ -349,56 +415,95 @@ class EthindexDB:
         ]
         return sorted_events(list(itertools.chain.from_iterable(results)))
 
-    def get_leaf_by_index(
-        self, leaf_index: int, timeout: float = None, shield_address: str = None
-    ) -> BlockchainEvent:
-        shield_address = self._get_addr(shield_address)
+    """Merkle Tree"""
 
-        # query "NewLeaf" events
-        query = EventsQuery(
-            """eventName=%s
-               AND address=%s
-               AND args @> %s""",
-            (
-                "NewLeaf",
-                shield_address,
-                psycopg2.extras.Json({"leafIndex": leaf_index}),
-            ),
+    def get_leaf_by_leaf_index(self, merkle_tree_address: str, leaf_index: int):
+        merkle_tree_address = self._get_addr(merkle_tree_address)
+
+        query = MerkleTreeNodesQuery(
+            """merkleTreeAddress=%s
+               AND leafIndex=%s""",
+            (merkle_tree_address, leaf_index),
         )
-        events = self._run_events_query(query)
+
+        rows = self._run_merkle_tree_nodes_query(query)
 
         logger.debug(
-            "get_leaf_by_index(%s, %s, %s) -> %s rows",
+            "get_leaf_by_leaf_index(%s, %s) -> %s rows",
+            merkle_tree_address,
             leaf_index,
-            timeout,
-            shield_address,
-            len(events),
+            len(rows),
         )
 
-        return events
+        if len(rows) == 0:
+            rows = [{}]
 
-    def get_leaves_by_index(
-        self, leaf_index: int, timeout: float = None, shield_address: str = None
-    ) -> BlockchainEvent:
-        shield_address = self._get_addr(shield_address)
+        return rows[0]
 
-        query = EventsQuery(
-            """eventName=%s
-                AND address=%s
-                AND (args->>'minLeafIndex')::int <= %s""",
-            ("NewLeaves", shield_address, psycopg2.extras.Json(leaf_index)),
+    def get_leaves_by_leaf_indices(self, merkle_tree_address: str, leaf_indices: list):
+        merkle_tree_address = self._get_addr(merkle_tree_address)
+
+        query = MerkleTreeNodesQuery(
+            """merkleTreeAddress=%s
+               AND leafIndex in %s""",
+            (merkle_tree_address, tuple(leaf_indices)),
         )
-        events = self._run_events_query(query)
+
+        rows = self._run_merkle_tree_nodes_query(query)
 
         logger.debug(
-            "get_leaves_by_index(%s, %s, %s) -> %s rows",
-            leaf_index,
-            timeout,
-            shield_address,
-            len(events),
+            "get_nodes_by_node_indices(%s, %s, %s) -> %s rows",
+            merkle_tree_address,
+            merkle_tree_address,
+            leaf_indices,
+            len(rows),
         )
 
-        return events
+        return rows
+
+    def get_node_by_node_index(self, merkle_tree_address: str, node_index: int):
+        merkle_tree_address = self._get_addr(merkle_tree_address)
+
+        query = MerkleTreeNodesQuery(
+            """merkleTreeAddress=%s
+               AND nodeIndex=%s""",
+            (merkle_tree_address, node_index),
+        )
+
+        rows = self._run_merkle_tree_nodes_query(query)
+
+        logger.debug(
+            "get_node_by_index(%s, %s) -> %s rows",
+            merkle_tree_address,
+            node_index,
+            len(rows),
+        )
+
+        if len(rows) == 0:
+            rows = [{}]
+
+        return rows[0]
+
+    def get_nodes_by_node_indices(self, merkle_tree_address: str, node_indices: list):
+        merkle_tree_address = self._get_addr(merkle_tree_address)
+
+        query = MerkleTreeNodesQuery(
+            """merkleTreeAddress=%s
+               AND nodeIndex in %s""",
+            (merkle_tree_address, tuple(node_indices)),
+        )
+
+        rows = self._run_merkle_tree_nodes_query(query)
+
+        logger.debug(
+            "get_nodes_by_node_indices(%s, %s, %s) -> %s rows",
+            merkle_tree_address,
+            merkle_tree_address,
+            node_indices,
+            len(rows),
+        )
+
+        return rows
 
     def get_events(
         self,

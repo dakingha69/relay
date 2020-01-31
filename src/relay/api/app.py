@@ -37,8 +37,9 @@ from .resources import (
     GraphDump,
     GraphImage,
     IdentityInfos,
-    LeafByLeafIndex,
     MaxCapacityPath,
+    MerkleTreeLeaves,
+    MerkleTreeNodes,
     MetaTransactionFees,
     Network,
     NetworkList,
@@ -52,7 +53,6 @@ from .resources import (
     ShieldRoot,
     ShieldVerificationKey,
     ShieldVerificationKeyList,
-    SiblingPathByLeafIndex,
     TransactionInfos,
     Trustline,
     TrustlineList,
@@ -213,10 +213,8 @@ def ApiApp(trustlines):
     """
     merkle tree convenience resources
     """
-    add_resource(LeafByLeafIndex, "/shields/<address:shield_address>/leaves")
-    add_resource(
-        SiblingPathByLeafIndex, "/shields/<address:shield_address>/sibling-path"
-    )
+    add_resource(MerkleTreeLeaves, "/shields/<address:shield_address>/leaves")
+    add_resource(MerkleTreeNodes, "/shields/<address:shield_address>/nodes")
 
     api_bp.add_url_rule(
         "/networks/<address:network_address>/image",
