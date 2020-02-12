@@ -29,7 +29,8 @@ class GatewayProxy(Proxy):
         self.gated_currency_network_address: str = self._proxy.functions.getCurrencyNetwork().call()
 
     def deposits_of(self, user_address: str):
-        return self._proxy.functions.depositsOf(user_address).call()
+        deposit = self._proxy.functions.depositsOf(user_address).call()
+        return str(deposit)
 
     def get_gateway_events(
         self, event_name: str, from_block: int = 0, timeout: float = None

@@ -254,7 +254,9 @@ class GatewayDeposit(Resource):
 
     def get(self, gateway_address: str, user_address: str):
         abort_if_unknown_gateway(self.trustlines, gateway_address)
-        return self.trustlines.get_gateway(gateway_address).deposits_of(user_address)
+        return str(
+            self.trustlines.get_gateway(gateway_address).deposits_of(user_address)
+        )
 
 
 class UserList(Resource):

@@ -155,7 +155,7 @@ class ShieldEventSchema(BlockchainEventSchema):
     newGateway = Address(attribute="new_gateway")
     byShieldContract = BigInteger(attribute="by_shield_contract")
     byVerifierContract = BigInteger(attribute="by_verifier_contract")
-    byCurrencyNetworkContract = BigInteger(attribute="by_currencyNetwork_contract")
+    byCurrencyNetworkContract = BigInteger(attribute="by_currency_network_contract")
 
 
 class AnyEventSchema(OneOfSchema):
