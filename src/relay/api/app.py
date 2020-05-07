@@ -32,7 +32,8 @@ from .resources import (
     EventsShield,
     Factories,
     Gateway,
-    GatewayDeposit,
+    GatewayCollateral,
+    GatewayTotalCollateral,
     GatewayList,
     GraphDump,
     GraphImage,
@@ -186,8 +187,13 @@ def ApiApp(trustlines):
     add_resource(Gateway, "/gateways/<address:gateway_address>")
 
     add_resource(
-        GatewayDeposit,
+        GatewayCollateral,
         "/gateways/<address:gateway_address>/deposits/<address:user_address>",
+    )
+
+    add_resource(
+        GatewayTotalCollateral,
+        "/gateways/<address:gateway_address>/total-collateral",
     )
 
     add_resource(EventsGateway, "/gateways/<address:gateway_address>/events")

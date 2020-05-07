@@ -7,7 +7,6 @@ import relay.concurrency_utils as concurrency_utils
 
 from .events import BlockchainEvent
 from .gateway_events import (
-    ExchangeRateChangedEventType,
     event_builders,
     standard_event_types,
 )
@@ -24,13 +23,16 @@ class GatewayProxy(Proxy):
 
     def __init__(self, web3, gateway_abi, address: str) -> None:
         super().__init__(web3, gateway_abi, address)
-        self.exchange_rate: int = self._proxy.functions.exchangeRate().call()
-        self.escrow_address: str = self._proxy.functions.getEscrow().call()
+        self.collateral_manager_address: str = self._proxy.functions.getCollateralManager().call()
         self.gated_currency_network_address: str = self._proxy.functions.getCurrencyNetwork().call()
 
-    def deposits_of(self, user_address: str):
-        deposit = self._proxy.functions.depositsOf(user_address).call()
-        return str(deposit)
+    def collateral_of(self, user_address: str):
+        collateral = self._proxy.functions.collateralOf(user_address).call()
+        return str(collateral)
+
+    def total_collateral(self):
+        total_collateral = self._proxy.functions.totalCollateral().call()
+        return str(total_collateral)
 
     def get_gateway_events(
         self, event_name: str, from_block: int = 0, timeout: float = None
@@ -53,9 +55,3 @@ class GatewayProxy(Proxy):
         ]
         results = concurrency_utils.joinall(queries, timeout=timeout)
         return sorted_events(list(itertools.chain.from_iterable(results)))
-
-    def start_listen_on_exchange_rate_changed(self, on_exchange_rate_changed) -> None:
-        def log(log_entry):
-            on_exchange_rate_changed(self._build_event(log_entry))
-
-        self.start_listen_on(ExchangeRateChangedEventType, log)

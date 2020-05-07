@@ -248,14 +248,25 @@ class Gateway(Resource):
         return self.trustlines.get_gateway(gateway_address)
 
 
-class GatewayDeposit(Resource):
+class GatewayCollateral(Resource):
     def __init__(self, trustlines: TrustlinesRelay) -> None:
         self.trustlines = trustlines
 
     def get(self, gateway_address: str, user_address: str):
         abort_if_unknown_gateway(self.trustlines, gateway_address)
         return str(
-            self.trustlines.get_gateway(gateway_address).deposits_of(user_address)
+            self.trustlines.get_gateway(gateway_address).collateral_of(user_address)
+        )
+
+
+class GatewayTotalCollateral(Resource):
+    def __init__(self, trustlines: TrustlinesRelay) -> None:
+        self.trustlines = trustlines
+
+    def get(self, gateway_address: str):
+        abort_if_unknown_gateway(self.trustlines, gateway_address)
+        return str(
+            self.trustlines.get_gateway(gateway_address).total_collateral()
         )
 
 
